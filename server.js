@@ -1,74 +1,88 @@
 const express = require('express');
-const getConnection = require('./db'); // <-- DIUBAH: Impor fungsi koneksi dari db.js
+const getConnection = require('./db');
 const app = express();
+const PORT = 3000;
 
 app.use(express.json());
 
-// endpoint test
+// Endpoint root untuk tes
 app.get('/', (req, res) => {
-  res.send('API Pendapatan Daerah berjalan 🚀');
+    res.send('API Status Pajak Penduduk berjalan 🚀');
 });
 
-// endpoint ambil semua data
-app.get('/pendapatan', async (req, res) => {
-  let connection; // Definisikan di luar try agar bisa diakses di finally
-  try {
-    connection = await getConnection(); // <-- DIUBAH: Gunakan fungsi yang sudah ada
-    const result = await connection.execute(`SELECT * FROM pendapatan_daerah`);
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Gagal mengambil data');
-  } finally {
-    if (connection) {
-      try {
-        await connection.close(); // Pastikan koneksi selalu ditutup
-      } catch (err) {
-        console.error(err);
-      }
+
+// ==========================================================
+// === BARU: ENDPOINT UNTUK MENGAMBIL SEMUA DATA PAJAK ===
+// Cara memanggil: GET http://localhost:3000/pajak
+// ==========================================================
+app.get('/pajak', async (req, res) => {
+    let connection;
+
+    try {
+        connection = await getConnection();
+        
+        // Query sederhana untuk mengambil semua baris dari tabel
+        const result = await connection.execute(
+            `SELECT * FROM status_pajak ORDER BY id_wajib_pajak ASC` // Diurutkan agar rapi
+        );
+
+        // Kirim semua data yang ditemukan sebagai array JSON.
+        // Jika tidak ada data, ini akan mengirim array kosong [], yang merupakan perilaku yang benar.
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error("Terjadi error di API (GET /pajak):", err);
+        res.status(500).send('Gagal mengambil semua data dari server.');
+    } finally {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (err) {
+                console.error("Gagal menutup koneksi:", err);
+            }
+        }
     }
-  }
 });
 
-// endpoint tambah data
-// DIPERBAIKI: Logika disesuaikan dengan skema tabel yang benar
-app.post('/pendapatan', async (req, res) => {
-  // Ambil semua data yang relevan dari body request
-  const { nama_daerah, tahun, pajak, retribusi, lain_lain } = req.body;
 
-  // Validasi sederhana
-  if (!nama_daerah || !tahun || !pajak || !retribusi || !lain_lain) {
-    return res.status(400).send('Semua field (nama_daerah, tahun, pajak, retribusi, lain_lain) wajib diisi.');
-  }
+// ================================================================
+// === ENDPOINT UNTUK MENCARI DATA PAJAK BERDASARKAN ID SPESIFIK ===
+// Cara memanggil: GET http://localhost:3000/pajak/WPX001
+// ================================================================
+app.get('/pajak/:id', async (req, res) => {
+    const idWajibPajak = req.params.id;
+    let connection;
 
-  let connection;
-  try {
-    connection = await getConnection();
-    await connection.execute(
-      // Gunakan kolom yang benar
-      `INSERT INTO pendapatan_daerah (nama_daerah, tahun, pajak, retribusi, lain_lain) 
-       VALUES (:1, :2, :3, :4, :5)`,
-      // Masukkan semua data yang relevan
-      [nama_daerah, tahun, pajak, retribusi, lain_lain],
-      { autoCommit: true } // autoCommit bagus untuk insert tunggal
-    );
-    res.status(201).send('Data berhasil ditambahkan!');
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Gagal menambahkan data');
-  } finally {
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (err) {
-        console.error(err);
-      }
+    try {
+        connection = await getConnection();
+        
+        const result = await connection.execute(
+            `SELECT * FROM status_pajak WHERE id_wajib_pajak = :id`,
+            [idWajibPajak]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: `Data untuk ID Wajib Pajak '${idWajibPajak}' tidak ditemukan.` });
+        }
+
+        res.json(result.rows[0]);
+
+    } catch (err) {
+        console.error("Terjadi error di API (GET /pajak/:id):", err);
+        res.status(500).send('Gagal mengambil data dari server.');
+    } finally {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (err) {
+                console.error("Gagal menutup koneksi:", err);
+            }
+        }
     }
-  }
 });
 
-// jalankan server
-const PORT = 3000;
+
+// Jalankan server
 app.listen(PORT, () => {
-  console.log(`Server berjalan di http://localhost:${PORT}`);
+    console.log(`Server berjalan di http://localhost:${PORT}`);
 });
