@@ -1,9 +1,9 @@
+// File: createTable.js
 const getConnection = require('./db');
 
 async function createTable() {
   const connection = await getConnection();
   try {
-    // Membuat tabel baru untuk menyimpan status pajak penduduk
     await connection.execute(`
       CREATE TABLE status_pajak (
         id_wajib_pajak VARCHAR2(20) PRIMARY KEY,
